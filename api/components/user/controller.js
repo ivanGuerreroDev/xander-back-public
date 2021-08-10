@@ -336,7 +336,7 @@ module.exports = function (injectedStore) {
                 })
 
                 // Enviar correo
-                const responseCorreo = await ControllerCorreo.sendCorreo({
+               /* const responseCorreo = await ControllerCorreo.sendCorreo({
                     to: email,
                     subject: 'Completa el registro',
                     html: `
@@ -344,13 +344,16 @@ module.exports = function (injectedStore) {
                         <p>Haz click en este enlace para completar tu registro en xander</p>
                         <a href=${ referer + `/${ token }` }>Completar registro</a>
                     `
-                })
+                })*/
+
+                console.log("url: ", referer + `/${ token }` )
 
                 resolve({
                     info: 0,
                     message: "Se ha enviado un correo con el link para completar el registro"
                 })
             } catch( error ) {
+                console.log(error)
                 reject(error)
             }
         })

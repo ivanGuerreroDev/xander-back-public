@@ -13,8 +13,7 @@ const config = require('../config.js')
 const mensajes = require('./socket/mensajes')
 
 // CRON
-const actualizarTop = require('./cron/actualizarTop')
-const actualizarSubidasPersonalizadas = require('./cron/actualizarSubidasPersonalizadas')
+const subirAnuncios = require('./cron/subirAnuncios')
 
 // Network
 const uploads = require('./components/uploads/network')
@@ -112,7 +111,7 @@ const ControllerSubidasPersonalizadasConfig = require("./components/subidaPerson
 
 async function setCronDinamico () {
     const response = await ControllerSubidasPersonalizadasConfig.list()
-    cron.schedule(`*/${ response[0].cron_segundos } * * * * *`, actualizarSubidasPersonalizadas);
+    cron.schedule(`*/${ response[0].cron_segundos } * * * * *`, subirAnuncios);
 }
 setCronDinamico()
 
