@@ -42,10 +42,8 @@ const actualizarSubidasPersonalizadas = async () => {
             })
         } else {
             // Actualizar al siguiente subida personalizada detalle
-
             const nextUpdates = await ControllerSubidaPersonalizadaCompleta.getNextUpdates(newUpdateAt, id)
             console.table(nextUpdates)            
-
             if (nextUpdates.length > 0) {
                 const { fecha_inicio, fecha_fin, incremento } = nextUpdates[0]
 
@@ -84,12 +82,11 @@ const subirAnuncios = async () => {
     const config = await ControllerSubidaPersonalizadaConfig.list()
     const { cron_segundos, subidas_minimas, porcentaje_restante } = config[0]
     console.log(`Cada ${ cron_segundos } segundos, se sube ${ subidas_minimas } anuncios con porcentaje de exceso de  ${ porcentaje_restante }`)
-
     const cant_anuncios_por_subida = parseInt(subidas_minimas * ( porcentaje_restante + 1 ))
     /**
      * tabla de anuncios para subir
      */
-    const tabla_anuncios_por_subir = anuncios.map(async a => {
+    const tabla_anuncios_por_subir = anuncios.map( a => {
         return {
             id: a.id,
             posicion: a.posicion,
@@ -97,17 +94,17 @@ const subirAnuncios = async () => {
             fecha_inicio: a.fecha_inicio,
             fecha_fin: a.fecha_fin,
             fecha_fin_total: a.fecha_fin_total,
-            incremento: a.incremento
+            incremento:  a.incremento
         }
     })
     // Shuffle array
-    const shuffled = tabla_anuncios_por_subir.sort(() => 0.5 - Math.random());
+    const shuffled = await tabla_anuncios_por_subir.sort(() => 0.5 - Math.random());
     let anuncios_que_subiran = shuffled.slice(0, cant_anuncios_por_subida);
-
-    anuncios_que_subiran.forEach( async anuncio => {
-        const fechaFin = moment(anuncio.fecha_fin).utc().format(fullFormat)
-        const updateAt = moment(anuncio.update_at).utc().format(fullFormat)
-        const newUpdateAt = moment(anuncio.update_at).add(anuncio.incremento, "minutes").utc().format(fullFormat)
+    await anuncios_que_subiran.map( async anuncio => {
+        const {id, update_at, fecha_fin, incremento } = anuncio
+        const fechaFin = moment(fecha_fin).utc().format(fullFormat)
+        const updateAt = moment(update_at).utc().format(fullFormat)
+        const newUpdateAt = moment(update_at).add(incremento, "minutes").utc().format(fullFormat)
         /**
          * Sube el anuncio si:
          * - La siguiente fecha de incremento supera la fecha fin
@@ -124,6 +121,7 @@ const subirAnuncios = async () => {
             * Buscar subidas para dias siguientes y colocar en update_at del comercio
             */
             const nextUpdates = await ControllerSubidaPersonalizadaCompleta.getNextUpdates(newUpdateAt, id)
+            console.table(nextUpdates) 
             if (nextUpdates.length > 0) {
                 const { fecha_inicio } = nextUpdates[0]
                 const fInicio = moment(fecha_inicio).utc().format(fullFormat)
