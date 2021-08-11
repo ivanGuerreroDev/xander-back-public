@@ -143,6 +143,6 @@ const subirAnuncios = async () => {
             }
         }
     })
-}
+} 
 
 module.exports = subirAnuncios
