@@ -1,88 +1,51 @@
 const moment = require('moment')
-
+const store = require('../../store/mysql')
 const fullFormat = 'YYYY-MM-DD HH:mm:ss'
 
 
 
 const ControllerSubidaPersonalizadaCompleta = require("../components/subidaPersonalizadaCompleta/index")
 const ControllerComercio = require("../components/comercio/index")
-const ControllerSubidaPersonalizadaConfig = require("../components/subidaPersonalizadaConfig/index")
 
-const actualizarSubidasPersonalizadas = async () => {
-    var actualizar = await ControllerSubidaPersonalizadaCompleta.getComerciosParaActualizar()
-    console.table(actualizar)
-    const config = await ControllerSubidaPersonalizadaConfig.list()
-
-    const { cron_segundos } = config[0]
-    console.log(`Running every ${ cron_segundos } second(s)`)
-
-    actualizar.map(async a => {
-        const { id, posicion, update_at, fecha_inicio, fecha_fin, fecha_fin_total, incremento } = a
-
-        const fechaInicio = moment(fecha_inicio).utc().format("YYYY-MM-DD HH:mm:ss")
-        const fechaFin = moment(fecha_fin).utc().format("YYYY-MM-DD HH:mm:ss")
-        const fechaFinTotal = moment(fecha_fin_total).utc().format("YYYY-MM-DD HH:mm:ss")
-        const posicionFormateada = moment(posicion).utc().format("YYYY-MM-DD HH:mm:ss")
-        const updateAt = moment(update_at).utc().format("YYYY-MM-DD HH:mm:ss")
-        const newUpdateAt = moment(update_at).add(incremento, "minutes").utc().format("YYYY-MM-DD HH:mm:ss")
-
-        // console.log("Fecha Inicio:", fechaInicio, "Fecha fin:", fechaFin)
-        // console.log("-- ---- --- --- ")
-        // console.log("Posicion Actual:", posicionFormateada, "Actualizar:", updateAt)
-        // console.log("-- ---- --- --- ")
-        // console.log("Nuevo Actualizar:", newUpdateAt, "Fecha Fin total:", fechaFinTotal)
-        // console.log("-- ---- --- --- ")
-
-        if (newUpdateAt <= fechaFin) {
-            // Actualizar
-            await ControllerComercio.updateSubidaPersonalizada({
-                id,
-                posicion: updateAt,
-                update_at: newUpdateAt
-            })
-        } else {
-            // Actualizar al siguiente subida personalizada detalle
-            const nextUpdates = await ControllerSubidaPersonalizadaCompleta.getNextUpdates(newUpdateAt, id)
-            console.table(nextUpdates)            
-            if (nextUpdates.length > 0) {
-                const { fecha_inicio, fecha_fin, incremento } = nextUpdates[0]
-
-                const fInicio = moment(fecha_inicio).utc().format("YYYY-MM-DD HH:mm:ss")
-                const fFin = moment(fecha_fin).utc().format("YYYY-MM-DD HH:mm:ss")
-
-                console.log(fInicio, fFin)
-
-                await ControllerComercio.updateSubidaPersonalizada({
-                    id,
-                    posicion: updateAt,
-                    update_at: fInicio
-                })
-            } else {
-                await ControllerComercio.updateSubidaPersonalizada({
-                    id,
-                    posicion: updateAt,
-                    update_at: null,
-                    id_subida_personalizada_completa: null
-                })
-            }
-        }
-    })
-}
-
-const subirAnuncios = async () => {
+const subirAnuncios = async (tipo, avisos_x_cron, tipo_zona = undefined, zona = undefined) => {
     /*
         *   Get de anuncios
         *   inicio <= update_at
         *   fin >=  update_at
         *   update_at < AHORA
     */
-    var anuncios = await ControllerSubidaPersonalizadaCompleta.getComerciosParaActualizar()
-
+    let query;
+    if(tipo === 'AUTOMATICO' && tipo_zona && zona){
+        query = `
+            SELECT c.id, c.posicion, c.update_at, spcd.fecha_inicio, spcd.fecha_fin, spc.fecha_fin as fecha_fin_total,
+                spcd.incremento
+            FROM comercio as c
+            INNER JOIN subida_personalizada_completa as spc on c.id_subida_personalizada_completa = spc.id
+            INNER JOIN subida_personalizada_completa_detalle as spcd ON spcd.id_subida_personalizada_completa = spc.id
+            INNER JOIN country as country ON country.id = c.country
+            LEFT JOIN state as state ON state.id = c.state
+            LEFT JOIN city as city ON city.id = c.city
+            WHERE spcd.fecha_inicio <= c.update_at and spcd.fecha_fin >= c.update_at
+            AND c.update_at < NOW()
+            AND ${tipo_zona.toLowerCase()}.name = '${zona}'
+        `
+    }else{
+        query = `
+            SELECT c.id, c.posicion, c.update_at, spcd.fecha_inicio, spcd.fecha_fin, spc.fecha_fin as fecha_fin_total,
+                spcd.incremento
+            FROM comercio as c
+            INNER JOIN subida_personalizada_completa as spc
+            on c.id_subida_personalizada_completa = spc.id
+            INNER JOIN subida_personalizada_completa_detalle as spcd
+            ON spcd.id_subida_personalizada_completa = spc.id
+            WHERE spcd.fecha_inicio <= c.update_at and spcd.fecha_fin >= c.update_at
+            AND c.update_at < NOW()
+        `
+    }
+    const anuncios = await store.customQuery(query)
+    
     // Configuracion de subidas
-    const config = await ControllerSubidaPersonalizadaConfig.list()
-    const { cron_segundos, subidas_minimas, porcentaje_restante } = config[0]
-    console.log(`Cada ${ cron_segundos } segundos, se sube ${ subidas_minimas } anuncios con porcentaje de exceso de  ${ porcentaje_restante }`)
-    const cant_anuncios_por_subida = parseInt(subidas_minimas * ( porcentaje_restante + 1 ))
+    const cant_anuncios_por_subida = avisos_x_cron;
     /**
      * tabla de anuncios para subir
      */
@@ -121,7 +84,6 @@ const subirAnuncios = async () => {
             * Buscar subidas para dias siguientes y colocar en update_at del comercio
             */
             const nextUpdates = await ControllerSubidaPersonalizadaCompleta.getNextUpdates(newUpdateAt, id)
-            console.table(nextUpdates) 
             if (nextUpdates.length > 0) {
                 const { fecha_inicio } = nextUpdates[0]
                 const fInicio = moment(fecha_inicio).utc().format(fullFormat)

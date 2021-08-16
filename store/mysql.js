@@ -18,16 +18,7 @@ const dConfig = {
 let connection
 
 function handleCon () {
-    connection = mysql.createConnection(dConfig)
-
-    connection.connect((err) => {
-        if (err) {
-            console.error('[db err]', err.message)
-            setTimeout(handleCon, 2000)
-        } else {
-            console.log('DB connected!')
-        }
-    })
+    connection = mysql.createPool(dConfig)
 
     connection.on('err', err => {
         console.error('[db err]', err.message)
@@ -41,6 +32,10 @@ function handleCon () {
 }
 
 handleCon()
+
+function end () {
+    connection.end()
+}
 
 function list (table) {
     return new Promise ((resolve, reject) => {
@@ -103,6 +98,36 @@ function query (table, query) {
     })
 }
 
+function query2 (table, query) {
+    return new Promise ((resolve, reject) => {
+        connection.query(`SELECT * FROM ${ table } WHERE ${query}`, (err, res) => {
+            if (err) return reject(err)
+            resolve(res || null)
+        })
+    })
+}
+
+function customQuery (query) {
+    return new Promise ((resolve, reject) => {
+        connection.query(`${query}`, (err, res) => {
+            if (err) return reject(err)
+            resolve(res || null)
+        })
+    })
+}
+
+function remove (table, id) {
+    return new Promise ((resolve, reject) => {
+        connection.query(`DELETE FROM ${ table } WHERE ?`, id, (err, result) => {
+            if (err) return reject (err)
+            resolve ({
+                id,
+                result
+            })
+        })
+    })
+}
+
 function stored_procedure_without_params (sp) {
     return new Promise ((resolve, reject) => {
         connection.query(`CALL ${ sp }()`, (err, res) => {
@@ -124,8 +149,14 @@ function stored_procedure (sp, formattedParams) {
 module.exports = {
     list,
     get,
+    insert,
     upsert,
+    update,
     query,
+    query2,
+    customQuery,
+    remove,
     stored_procedure,
-    stored_procedure_without_params
+    stored_procedure_without_params,
+    end
 }

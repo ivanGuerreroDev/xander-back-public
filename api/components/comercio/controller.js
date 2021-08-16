@@ -211,7 +211,7 @@ module.exports = function (injectedStore) {
                 const { tags, celular, descripcion, direccion, distrito, email, envios_provincia_exterior,
                     experiencia, facebook, id_city, nombre, numero_signal, skype, telegram,
                     tipo_venta, vende, web, whatsapp, tags_usuario, posicion, id_sub_categoria, 
-                    horario, camposPersonalizados } = body
+                    horario, camposPersonalizados, country, state, city } = body
                 const { tipo, files } = uploads
                 
                 const tagsData = JSON.parse(tags)
@@ -254,6 +254,9 @@ module.exports = function (injectedStore) {
                     facebook,
                     web,
                     direccion,
+                    country,
+                    state,
+                    city,
                     distrito,
                     skype,
                     created_at: moment().utc().format('YYYY-MM-DD HH-mm-ss'),

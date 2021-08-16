@@ -17,6 +17,71 @@ module.exports = function (injectedStore) {
     function list() {
         return store.stored_procedure_without_params("get_subida_comercio_completo_list")
     }
+    function listSubidaConf(zona) {
+        let query = '';
+        switch (zona) {
+            case 'COUNTRY':
+                query = `
+                    SELECT MAX(a.subidas) as subidas_max , a.hora, a.zona, a.country FROM
+                        (
+                            SELECT 
+                                SUM(detalle.subidas) as subidas,
+                                detalle.fecha_inicio as hora,
+                                country.name as country, country.name as zona
+                            FROM subida_personalizada_completa_detalle as detalle
+                            INNER JOIN subida_personalizada_completa as subida ON detalle.id_subida_personalizada_completa = subida.id
+                            INNER JOIN comercio as comercio ON comercio.id = subida.id_comercio
+                            INNER JOIN country as country ON country.id = comercio.country
+                            WHERE detalle.fecha_inicio > NOW()
+                            GROUP BY hora, zona
+                        ) as a
+                    GROUP BY a.zona
+                `
+                break;
+            case 'STATE':
+                query = `
+                    SELECT MAX(a.subidas) as subidas_max , a.hora, a.zona, a.state FROM
+                        (
+                            SELECT 
+                                SUM(detalle.subidas) as subidas,
+                                detalle.fecha_inicio as hora,
+                                country.name as country, country.name, state.name as zona
+                            FROM subida_personalizada_completa_detalle as detalle
+                            INNER JOIN subida_personalizada_completa as subida ON detalle.id_subida_personalizada_completa = subida.id
+                            INNER JOIN comercio as comercio ON comercio.id = subida.id_comercio
+                            INNER JOIN country as country ON country.id = comercio.country
+                            INNER JOIN state as state ON state.id = comercio.state
+                            WHERE detalle.fecha_inicio > NOW()
+                            GROUP BY hora, zona
+                        ) as a
+                    GROUP BY a.zona
+                `;
+                break;
+            case 'CITY':
+                query = `
+                    SELECT MAX(a.subidas) as subidas_max , a.hora, a.zona, a.state, a.city FROM
+                        (
+                            SELECT 
+                                SUM(detalle.subidas) as subidas,
+                                detalle.fecha_inicio as hora,
+                                country.name as country, country.name, state.name as state, city.name as zona
+                            FROM subida_personalizada_completa_detalle as detalle
+                            INNER JOIN subida_personalizada_completa as subida ON detalle.id_subida_personalizada_completa = subida.id
+                            INNER JOIN comercio as comercio ON comercio.id = subida.id_comercio
+                            INNER JOIN country as country ON country.id = comercio.country
+                            INNER JOIN state as state ON state.id = comercio.state
+                            LEFT JOIN city as city ON city.id = comercio.city
+                            WHERE detalle.fecha_inicio > NOW()
+                            GROUP BY hora, zona
+                        ) as a
+                    GROUP BY a.zona
+                `;
+                break;
+            default:
+                break;
+        }
+        return store.customQuery(query)
+    }
 
     function upsert({ dataHeader, dataArray }) {
         return new Promise(async (resolve, reject) => {
@@ -85,6 +150,7 @@ module.exports = function (injectedStore) {
 
     return {
         list,
+        listSubidaConf,
         upsert,
         getComerciosParaActualizar,
         getNextUpdates
