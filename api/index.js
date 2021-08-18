@@ -186,7 +186,6 @@ const setCronListings = async () => {
                 )
             }
         })
-        console.log(cronObjects)
     }else{
         cronObjects.unico = cron.schedule(
             `*/${interval_seg_cron} * * * * *`, subirAnuncios("MANUAL", avisos_x_cron)

@@ -5,7 +5,9 @@ const TABLA = 'subida_personalizada_completa'
 
 const ControllerSubidaPersonalizadaDetalle = require('../subidaPersonalizadaCompletaDetalle/index.js')
 const ControllerSubidaPersonalizadaDetalleFecha = require('../subidaPersonalizadaCompletaDetalleFecha/index.js')
+const ControllerSubidasPersonalizadasConfig = require("../configSubidas/index")
 const ControllerComercio = require('../comercio/index')
+const { date } = require('../test/index.js')
 
 module.exports = function (injectedStore) {
 
@@ -83,6 +85,50 @@ module.exports = function (injectedStore) {
         return store.customQuery(query)
     }
 
+    async function validateDates(dates, meta) {
+        const response = await ControllerSubidasPersonalizadasConfig.list()
+        const {zona, subidas_x_hora} = response[0]
+        if(dates.length){
+            let whereZonaString = '', columnZonaString = ''
+            let joinString = `
+                INNER JOIN country as country ON country.id = c.country
+                INNER JOIN state as state ON state.id = c.state
+                LEFT JOIN city as city ON city.id = c.city
+            `
+            if(zona === "CITY"){
+                columnZonaString = 'CASE WHEN c.city IS NULL THEN c.state ELSE c.city END AS zona'
+                whereZonaString = ` AND ( (c.city IS NULL AND state.id = c.state) OR c.city = city.id )`;
+            }else{
+                columnZonaString = `${zona.toLowerCase()}.id AS zona`
+                whereZonaString = ` AND ${zona.toLowerCase()}.id = c.${zona.toLowerCase()}`
+            }
+            const query = `
+                SELECT SUM(d.subidas), d.fecha_inicio, d.fecha_fin, ${columnZonaString}
+                FROM subida_personalizada_completa_detalle as d
+                INNER JOIN subida_personalizada_completa as s on d.id_subida_personalizada_completa = s.id
+                INNER JOIN comercio as c on d.id_subida_personalizada_completa = c.id
+                ${joinString}
+                WHERE
+                d.fecha_inicio >= '${meta.fechaInicio}' AND d.fecha_fin <= '${meta.fechaFin}'
+                ${whereZonaString}
+                GROUP BY d.fecha_inicio
+            `;
+            const datesDb = await store.customQuery(query);
+            let fechas_no_disponibles = dates.map(  date => {
+                const fechas = datesDb.find(x => x.fecha_inicio === date.fechaInicio)
+                if(fechas){ var subidas_de_fecha = fechas.subidas }
+                let subidas_a_ingresar = parseInt(date.subidas) + parseInt(subidas_de_fecha)
+                if( subidas_a_ingresar > subidas_x_hora ){
+                    return date
+                }
+            })
+            return fechas_no_disponibles.filter((el) =>  el != null);
+
+        }
+        
+        
+    }
+
     function upsert({ dataHeader, dataArray }) {
         return new Promise(async (resolve, reject) => {
             const { idComercio, fechaInicio, fechaFin, destacar, id_transaccion, tipo_transaccion } = dataHeader 
@@ -153,6 +199,7 @@ module.exports = function (injectedStore) {
         listSubidaConf,
         upsert,
         getComerciosParaActualizar,
-        getNextUpdates
+        getNextUpdates,
+        validateDates
     }
 }

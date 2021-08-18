@@ -11,6 +11,15 @@ const router = express.Router()
 router.get('/', secure("admin"), list)
 router.get('/configurador', /*secure("admin"),*/ listSubidaConf)
 router.post('/', upsert)
+router.post('/validar-fechas', validateDates)
+
+function validateDates (req, res, next) {
+    Controller.validateDates(req.body.dates, req.body.meta)
+        .then((lista) => {
+            response.success(req, res, lista, 200)
+        })
+        .catch(next)
+}
 
 function list (req, res, next) {
     Controller.list()
