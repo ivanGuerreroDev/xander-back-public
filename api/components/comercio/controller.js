@@ -254,16 +254,16 @@ module.exports = function (injectedStore) {
                     facebook,
                     web,
                     direccion,
-                    country,
-                    state,
-                    city,
+                    country : country ? parseInt(country) : null,
+                    state : state ? parseInt(state) : null,
+                    city : city ? parseInt(city) :null,
                     distrito,
                     skype,
                     created_at: moment().utc().format('YYYY-MM-DD HH-mm-ss'),
                     posicion: moment().utc().format('YYYY-MM-DD HH:mm:ss'),
                     update_at: null
                 }
-
+                console.log(comercio)
                 const comercioStored = await store.upsert(TABLA, comercio)
                 
                 // Sacar tags usuario

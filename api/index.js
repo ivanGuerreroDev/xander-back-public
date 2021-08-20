@@ -55,7 +55,7 @@ const subidaPersonalizadaCompletaDetalle = require('./components/subidaPersonali
 const subidaPersonalizadaCompletaDetalleFecha = require('./components/subidaPersonalizadaCompletaDetalleFecha/network')
 const subidaPersonalizadaConfig = require('./components/subidaPersonalizadaConfig/network')
 const subidaPersonalizadaPrecio = require('./components/subidaPersonalizadaPrecio/network')
-
+const estadisticas = require('./components/estadisticas/network')
 
 const test = require('./components/test/network')
 
@@ -103,7 +103,7 @@ app.use('/api/subida-personalizada-completa-detalle', subidaPersonalizadaComplet
 app.use('/api/subida-personalizada-completa-detalle-fecha', subidaPersonalizadaCompletaDetalleFecha)
 app.use('/api/subida-personalizada-config', subidaPersonalizadaConfig)
 app.use('/api/subida-personalizada-precio', subidaPersonalizadaPrecio)
-
+app.use('/api/estadisticas', estadisticas)
 app.use('/api/test', test)
 
 app.use(errors)

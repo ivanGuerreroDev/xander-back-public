@@ -42,7 +42,7 @@ module.exports = function (injectedStore) {
                 break;
             case 'STATE':
                 query = `
-                    SELECT MAX(a.subidas) as subidas_max , a.hora, a.zona, a.state FROM
+                    SELECT MAX(a.subidas) as subidas_max , a.hora, a.zona, a.country FROM
                         (
                             SELECT 
                                 SUM(detalle.subidas) as subidas,
@@ -61,7 +61,7 @@ module.exports = function (injectedStore) {
                 break;
             case 'CITY':
                 query = `
-                    SELECT MAX(a.subidas) as subidas_max , a.hora, a.zona, a.state, a.city FROM
+                    SELECT MAX(a.subidas) as subidas_max , a.hora, a.country, a.zona FROM
                         (
                             SELECT 
                                 SUM(detalle.subidas) as subidas,
@@ -106,7 +106,7 @@ module.exports = function (injectedStore) {
                 SELECT SUM(d.subidas), d.fecha_inicio, d.fecha_fin, ${columnZonaString}
                 FROM subida_personalizada_completa_detalle as d
                 INNER JOIN subida_personalizada_completa as s on d.id_subida_personalizada_completa = s.id
-                INNER JOIN comercio as c on d.id_subida_personalizada_completa = c.id
+                INNER JOIN comercio as c on s.id_comercio = c.id
                 ${joinString}
                 WHERE
                 d.fecha_inicio >= '${meta.fechaInicio}' AND d.fecha_fin <= '${meta.fechaFin}'

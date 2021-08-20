@@ -34,7 +34,6 @@ async function listSubidaConf (req, res, next) {
     const {tipo, zona, subidas_x_hora, avisos_x_cron, interval_seg_cron} = config[0]
     Controller.listSubidaConf(zona)
         .then((lista) => {
-            console.log(lista)
             response.success(req, res, lista, 200)
         })
         .catch(next)
