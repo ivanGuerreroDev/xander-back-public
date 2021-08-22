@@ -8,6 +8,7 @@ const ControllerSubidaPersonalizadaCompleta = require("../components/subidaPerso
 const ControllerComercio = require("../components/comercio/index")
 
 const subirAnuncios = async (tipo, avisos_x_cron, tipo_zona = undefined, zona = undefined) => {
+    console.log('subida')
     /*
         *   Get de anuncios
         *   inicio <= update_at

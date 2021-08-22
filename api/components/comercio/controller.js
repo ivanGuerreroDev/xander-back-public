@@ -76,8 +76,9 @@ module.exports = function (injectedStore) {
 
                     comercios.push(c)
                 }
-
-
+                console.log('pais: ',body.pais)
+                console.log('comercios top: ',comerciosTop)
+                console.log('comercios: ',comercios)
                 resolve({
                     comerciosTop,
                     comercios

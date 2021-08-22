@@ -13,7 +13,7 @@ const config = require('../config.js')
 const mensajes = require('./socket/mensajes')
 
 // CRON
-const subirAnuncios = require('./cron/subirAnuncios')
+
 
 // Network
 const uploads = require('./components/uploads/network')
@@ -109,18 +109,28 @@ app.use('/api/test', test)
 app.use(errors)
 
 
-const ControllerSubidasPersonalizadasConfig = require("./components/configSubidas/index")
-const store = require('../store/mysql')
+
 var cronObjects = {}
 const cleanCronObjects = () => {
-    Object.keys(cronObjects).forEach( zona => {
-        cronObjects[zona] ? Object.keys(cronObjects[zona]).forEach( hora => {
-            cronObjects[zona][hora] ? cronObjects[zona][hora].cron.stop() : null;
-        }) : null
-    })
-    cronObjects = {}
+    if(Object.keys(cronObjects).length){
+        Object.keys(cronObjects).forEach( zona => {
+            if(zona !== 'unico'){
+                cronObjects[zona] ? Object.keys(cronObjects[zona]).forEach( hora => {
+                    cronObjects[zona][hora] ? cronObjects[zona][hora].cron.destroy() : null;
+                }) : null
+            }else{
+                cronObjects['unico'].destroy()
+            }
+        })
+        cronObjects = {}
+    }
 }
 const setCronListings = async () => {
+    const cron = require('node-cron')
+    const ControllerSubidasPersonalizadasConfig = require("./components/configSubidas/index")
+    const store = require('../store/mysql')
+    const subirAnuncios = require('./cron/subirAnuncios')
+
     console.log('set crons')
     cleanCronObjects()
     const response = await ControllerSubidasPersonalizadasConfig.list()
@@ -176,19 +186,18 @@ const setCronListings = async () => {
                 break;
         }
         const listado_de_fecha_hora = await store.customQuery(query)
-        
-        listado_de_fecha_hora.forEach( cron => {
-            let intervalo = get_subidas_seg(cron.hora.subidas)
-            cronObjects[cron.zona][cron.hora] = {
+        listado_de_fecha_hora.forEach( crone => {
+            let intervalo = get_subidas_seg(crone.hora.subidas)
+            cronObjects[crone.zona][crone.hora] = {
                 ...intervalo,
                 cron: cron.schedule(
-                    `*/${intervalo.interval} * * * * *`, subirAnuncios("AUTOMATICO", intervalo.subidas_maxima_x_cron, zona, cron.zona)
+                    `*/${intervalo.interval} * * * * *`, ()=>subirAnuncios("AUTOMATICO", intervalo.subidas_maxima_x_cron, zona, crone.zona)
                 )
             }
         })
     }else{
         cronObjects.unico = cron.schedule(
-            `*/${interval_seg_cron} * * * * *`, subirAnuncios("MANUAL", avisos_x_cron)
+            `*/${interval_seg_cron} * * * * *`, ()=>subirAnuncios("MANUAL", avisos_x_cron)
         )
     }
 }
