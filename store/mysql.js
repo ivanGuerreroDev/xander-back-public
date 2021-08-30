@@ -74,7 +74,6 @@ function update (table, data) {
     return new Promise ((resolve, reject) => {
         connection.query(`UPDATE ${ table } SET ? WHERE id = ?`, [data, data.id], (err, result) => {
             if (err) return reject (err)
-
             resolve (result)
         })
     })
@@ -82,7 +81,7 @@ function update (table, data) {
 
 async function upsert (table, data) {
     const row = await query(table, { id: data.id })
-
+    
     if (row.length > 0) 
         return update(table, data)
 

@@ -1,8 +1,13 @@
 const moment = require('moment')
 const store = require('../../store/mysql')
 const fullFormat = 'YYYY-MM-DD HH:mm:ss'
-
-
+const fs = require('fs');
+var log4js = require('log4js');
+log4js.configure({
+    appenders: { cheese: { type: "file", filename: "cheese.log" } },
+    categories: { default: { appenders: ["cheese"], level: "debug" } }
+});
+const logger = log4js.getLogger("cheese");
 
 const ControllerSubidaPersonalizadaCompleta = require("../components/subidaPersonalizadaCompleta/index")
 const ControllerComercio = require("../components/comercio/index")
@@ -16,7 +21,7 @@ const subirAnuncios = async (tipo, avisos_x_cron, tipo_zona = undefined, zona = 
         *   update_at < AHORA
     */
     let query;
-    if(tipo === 'AUTOMATICO' && tipo_zona && zona){
+    if (tipo === 'AUTOMATICO' && tipo_zona && zona) {
         query = `
             SELECT c.id, c.posicion, c.update_at, spcd.fecha_inicio, spcd.fecha_fin, spc.fecha_fin as fecha_fin_total,
                 spcd.incremento
@@ -30,7 +35,7 @@ const subirAnuncios = async (tipo, avisos_x_cron, tipo_zona = undefined, zona = 
             AND c.update_at < NOW()
             AND ${tipo_zona.toLowerCase()}.name = '${zona}'
         `
-    }else{
+    } else {
         query = `
             SELECT c.id, c.posicion, c.update_at, spcd.fecha_inicio, spcd.fecha_fin, spc.fecha_fin as fecha_fin_total,
                 spcd.incremento
@@ -44,13 +49,13 @@ const subirAnuncios = async (tipo, avisos_x_cron, tipo_zona = undefined, zona = 
         `
     }
     const anuncios = await store.customQuery(query)
-    
+
     // Configuracion de subidas
     const cant_anuncios_por_subida = avisos_x_cron;
     /**
      * tabla de anuncios para subir
      */
-    const tabla_anuncios_por_subir = anuncios.map( a => {
+    const tabla_anuncios_por_subir = anuncios.map(a => {
         return {
             id: a.id,
             posicion: a.posicion,
@@ -58,14 +63,14 @@ const subirAnuncios = async (tipo, avisos_x_cron, tipo_zona = undefined, zona = 
             fecha_inicio: a.fecha_inicio,
             fecha_fin: a.fecha_fin,
             fecha_fin_total: a.fecha_fin_total,
-            incremento:  a.incremento
+            incremento: a.incremento
         }
     })
     // Shuffle array
     const shuffled = await tabla_anuncios_por_subir.sort(() => 0.5 - Math.random());
     let anuncios_que_subiran = shuffled.slice(0, cant_anuncios_por_subida);
-    await anuncios_que_subiran.map( async anuncio => {
-        const {id, update_at, fecha_fin, incremento } = anuncio
+    await anuncios_que_subiran.map(async anuncio => {
+        const { id, update_at, fecha_fin, incremento } = anuncio
         const fechaFin = moment(fecha_fin).utc().format(fullFormat)
         const updateAt = moment(update_at).utc().format(fullFormat)
         const newUpdateAt = moment(update_at).add(incremento, "minutes").utc().format(fullFormat)
@@ -74,38 +79,31 @@ const subirAnuncios = async (tipo, avisos_x_cron, tipo_zona = undefined, zona = 
          * - La siguiente fecha de incremento supera la fecha fin
          * - La ultima subida es menor que la siguiente fecha de incremento, lo cual quiere decir que no se ha subido aun
          */
-        if (newUpdateAt <= fechaFin) {
-            await ControllerComercio.updateSubidaPersonalizada({
-                id,
-                posicion: updateAt,
+        if (moment(newUpdateAt) <= moment() && moment(newUpdateAt) < moment(fechaFin)) {
+            await ControllerComercio.update({
+                id: id,
+                posicion: newUpdateAt,
                 update_at: newUpdateAt
             })
-        }else{
+            logger.debug(id + " anuncio subido posicion: " + newUpdateAt + "\n");
+        } else {
             /**
             * Buscar subidas para dias siguientes y colocar en update_at del comercio
             */
             const nextUpdates = await ControllerSubidaPersonalizadaCompleta.getNextUpdates(newUpdateAt, id)
-            if (nextUpdates.length > 0) {
-                const { fecha_inicio } = nextUpdates[0]
-                const fInicio = moment(fecha_inicio).utc().format(fullFormat)
-                await ControllerComercio.updateSubidaPersonalizada({
-                    id,
-                    posicion: updateAt,
-                    update_at: fInicio
-                })
-            } else {
+            if (nextUpdates.length  === 0) {
                 /**
                  * Eliminacion de subida de anuncio
                  */
-                await ControllerComercio.updateSubidaPersonalizada({
+                await ControllerComercio.update({
                     id,
-                    posicion: updateAt,
                     update_at: null,
                     id_subida_personalizada_completa: null
-                })                
+                })
+                logger.debug(id + "Eliminacion anuncio subido posicion: " + updateAt + "\n");
             }
         }
     })
-} 
+}
 
 module.exports = subirAnuncios
