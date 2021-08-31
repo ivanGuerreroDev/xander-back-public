@@ -114,16 +114,25 @@ module.exports = function (injectedStore) {
                 GROUP BY d.fecha_inicio
             `;
             const datesDb = await store.customQuery(query);
-            let fechas_no_disponibles = dates.map(  date => {
-                const fechas = datesDb.find(x => x.fecha_inicio === date.fechaInicio)
-                if(fechas){ var subidas_de_fecha = fechas.subidas }
-                let subidas_a_ingresar = parseInt(date.subidas) + parseInt(subidas_de_fecha)
+            let filterByDates = {};
+            dates.forEach( date => {
+                filterByDates[date.fechaInicio+" "+date.fechaFin] = {
+                    fechaInicio: date.fechaInicio,
+                    fechaFin: date.fechaFin,
+                    subidas: filterByDates[date.fechaInicio+" "+date.fechaFin] ? filterByDates[date.fechaInicio+" "+date.fechaFin].subidas + parseInt(date.subidas) : parseInt(date.subidas)
+                }
+            })
+            var fechas_no_disponibles = []
+            Object.keys(filterByDates).forEach( date => {
+                let subidas_de_fecha = 0;
+                const fechas = datesDb.find(x => x.fecha_inicio === filterByDates[date].fechaInicio)
+                if(fechas){ subidas_de_fecha = fechas.subidas }
+                let subidas_a_ingresar = filterByDates[date].subidas + parseInt(subidas_de_fecha)
                 if( subidas_a_ingresar > subidas_x_hora ){
-                    return date
+                    fechas_no_disponibles.push(filterByDates[date])
                 }
             })
             return fechas_no_disponibles.filter((el) =>  el != null);
-
         }
         
         
