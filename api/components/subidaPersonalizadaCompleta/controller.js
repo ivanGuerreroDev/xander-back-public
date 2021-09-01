@@ -5,7 +5,9 @@ const TABLA = 'subida_personalizada_completa'
 
 const ControllerSubidaPersonalizadaDetalle = require('../subidaPersonalizadaCompletaDetalle/index.js')
 const ControllerSubidaPersonalizadaDetalleFecha = require('../subidaPersonalizadaCompletaDetalleFecha/index.js')
+const ControllerSubidasPersonalizadasConfig = require("../configSubidas/index")
 const ControllerComercio = require('../comercio/index')
+const { date } = require('../test/index.js')
 
 module.exports = function (injectedStore) {
 
@@ -16,6 +18,124 @@ module.exports = function (injectedStore) {
 
     function list() {
         return store.stored_procedure_without_params("get_subida_comercio_completo_list")
+    }
+    function listSubidaConf(zona) {
+        let query = '';
+        switch (zona) {
+            case 'COUNTRY':
+                query = `
+                    SELECT MAX(a.subidas) as subidas_max , a.hora, a.zona, a.country FROM
+                        (
+                            SELECT 
+                                SUM(detalle.subidas) as subidas,
+                                detalle.fecha_inicio as hora,
+                                country.name as country, country.name as zona
+                            FROM subida_personalizada_completa_detalle as detalle
+                            INNER JOIN subida_personalizada_completa as subida ON detalle.id_subida_personalizada_completa = subida.id
+                            INNER JOIN comercio as comercio ON comercio.id = subida.id_comercio
+                            INNER JOIN country as country ON country.id = comercio.country
+                            WHERE detalle.fecha_inicio > NOW()
+                            GROUP BY hora, zona
+                        ) as a
+                    GROUP BY a.zona
+                `
+                break;
+            case 'STATE':
+                query = `
+                    SELECT MAX(a.subidas) as subidas_max , a.hora, a.zona, a.country FROM
+                        (
+                            SELECT 
+                                SUM(detalle.subidas) as subidas,
+                                detalle.fecha_inicio as hora,
+                                country.name as country, country.name, state.name as zona
+                            FROM subida_personalizada_completa_detalle as detalle
+                            INNER JOIN subida_personalizada_completa as subida ON detalle.id_subida_personalizada_completa = subida.id
+                            INNER JOIN comercio as comercio ON comercio.id = subida.id_comercio
+                            INNER JOIN country as country ON country.id = comercio.country
+                            INNER JOIN state as state ON state.id = comercio.state
+                            WHERE detalle.fecha_inicio > NOW()
+                            GROUP BY hora, zona
+                        ) as a
+                    GROUP BY a.zona
+                `;
+                break;
+            case 'CITY':
+                query = `
+                    SELECT MAX(a.subidas) as subidas_max , a.hora, a.country, a.zona FROM
+                        (
+                            SELECT 
+                                SUM(detalle.subidas) as subidas,
+                                detalle.fecha_inicio as hora,
+                                country.name as country, country.name, state.name as state, city.name as zona
+                            FROM subida_personalizada_completa_detalle as detalle
+                            INNER JOIN subida_personalizada_completa as subida ON detalle.id_subida_personalizada_completa = subida.id
+                            INNER JOIN comercio as comercio ON comercio.id = subida.id_comercio
+                            INNER JOIN country as country ON country.id = comercio.country
+                            INNER JOIN state as state ON state.id = comercio.state
+                            LEFT JOIN city as city ON city.id = comercio.city
+                            WHERE detalle.fecha_inicio > NOW()
+                            GROUP BY hora, zona
+                        ) as a
+                    GROUP BY a.zona
+                `;
+                break;
+            default:
+                break;
+        }
+        return store.customQuery(query)
+    }
+
+    async function validateDates(dates, meta) {
+        const response = await ControllerSubidasPersonalizadasConfig.list()
+        const {zona, subidas_x_hora} = response[0]
+        if(dates.length){
+            let whereZonaString = '', columnZonaString = ''
+            let joinString = `
+                INNER JOIN country as country ON country.id = c.country
+                INNER JOIN state as state ON state.id = c.state
+                LEFT JOIN city as city ON city.id = c.city
+            `
+            if(zona === "CITY"){
+                columnZonaString = 'CASE WHEN c.city IS NULL THEN c.state ELSE c.city END AS zona'
+                whereZonaString = ` AND ( (c.city IS NULL AND state.id = c.state) OR c.city = city.id )`;
+            }else{
+                columnZonaString = `${zona.toLowerCase()}.id AS zona`
+                whereZonaString = ` AND ${zona.toLowerCase()}.id = c.${zona.toLowerCase()}`
+            }
+            const query = `
+                SELECT SUM(d.subidas), d.fecha_inicio, d.fecha_fin, ${columnZonaString}
+                FROM subida_personalizada_completa_detalle as d
+                INNER JOIN subida_personalizada_completa as s on d.id_subida_personalizada_completa = s.id
+                INNER JOIN comercio as c on s.id_comercio = c.id
+                ${joinString}
+                WHERE
+                d.fecha_inicio >= '${meta.fechaInicio}' AND d.fecha_fin <= '${meta.fechaFin}'
+                ${whereZonaString}
+                GROUP BY d.fecha_inicio
+            `;
+            const datesDb = await store.customQuery(query);
+            let filterByDates = {};
+            dates.forEach( date => {
+                filterByDates[date.fechaInicio+" "+date.fechaFin] = {
+                    fechaInicio: date.fechaInicio,
+                    fechaFin: date.fechaFin,
+                    subidas: filterByDates[date.fechaInicio+" "+date.fechaFin] ? filterByDates[date.fechaInicio+" "+date.fechaFin].subidas + parseInt(date.subidas) : parseInt(date.subidas)
+                }
+            })
+            var fechas_no_disponibles = []
+            Object.keys(filterByDates).forEach( date => {
+                let subidas_de_fecha = 0;
+                const fechas = datesDb.find(x => x.fecha_inicio === filterByDates[date].fechaInicio)
+                if(fechas){ subidas_de_fecha = fechas.subidas }
+                let subidas_a_ingresar = filterByDates[date].subidas + parseInt(subidas_de_fecha)
+                if( subidas_a_ingresar > subidas_x_hora ){
+                    fechas_no_disponibles.push(filterByDates[date])
+                }
+            })
+            return fechas_no_disponibles.filter((el) =>  el != null);
+        }
+        
+        
     }
 
     function upsert({ dataHeader, dataArray }) {
@@ -85,8 +205,10 @@ module.exports = function (injectedStore) {
 
     return {
         list,
+        listSubidaConf,
         upsert,
         getComerciosParaActualizar,
-        getNextUpdates
+        getNextUpdates,
+        validateDates
     }
 }

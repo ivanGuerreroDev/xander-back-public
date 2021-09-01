@@ -13,7 +13,7 @@ const config = require('../config.js')
 const mensajes = require('./socket/mensajes')
 
 // CRON
-const subirAnuncios = require('./cron/subirAnuncios')
+
 
 // Network
 const uploads = require('./components/uploads/network')
@@ -36,6 +36,7 @@ const testCorreo = require('./components/testCorreo/network')
 const emailVerify = require('./components/emailVerify/network')
 const seo = require('./components/seo/network')
 const configAdmin = require('./components/config/network')
+const configSubidas = require('./components/configSubidas/network')
 const subidaPersonalizada = require('./components/subidaPersonalizada/network')
 const userComercioChat = require('./components/userComercioChat/network')
 const mensaje = require('./components/mensaje/network')
@@ -54,7 +55,7 @@ const subidaPersonalizadaCompletaDetalle = require('./components/subidaPersonali
 const subidaPersonalizadaCompletaDetalleFecha = require('./components/subidaPersonalizadaCompletaDetalleFecha/network')
 const subidaPersonalizadaConfig = require('./components/subidaPersonalizadaConfig/network')
 const subidaPersonalizadaPrecio = require('./components/subidaPersonalizadaPrecio/network')
-
+const estadisticas = require('./components/estadisticas/network')
 
 const test = require('./components/test/network')
 
@@ -83,6 +84,7 @@ app.use('/api/test-correo', testCorreo)
 app.use('/api/email-verify', emailVerify)
 app.use('/api/seo', seo)
 app.use('/api/config', configAdmin)
+app.use('/api/config/subidas', configSubidas)
 app.use('/api/subida-personalizada', subidaPersonalizada)
 app.use('/api/user-comercio-chat', userComercioChat)
 app.use('/api/mensaje', mensaje)
@@ -101,19 +103,133 @@ app.use('/api/subida-personalizada-completa-detalle', subidaPersonalizadaComplet
 app.use('/api/subida-personalizada-completa-detalle-fecha', subidaPersonalizadaCompletaDetalleFecha)
 app.use('/api/subida-personalizada-config', subidaPersonalizadaConfig)
 app.use('/api/subida-personalizada-precio', subidaPersonalizadaPrecio)
-
+app.use('/api/estadisticas', estadisticas)
 app.use('/api/test', test)
 
 app.use(errors)
 
 
-const ControllerSubidasPersonalizadasConfig = require("./components/subidaPersonalizadaConfig/index")
 
-async function setCronDinamico () {
-    const response = await ControllerSubidasPersonalizadasConfig.list()
-    cron.schedule(`*/${ response[0].cron_segundos } * * * * *`, subirAnuncios);
+var cronObjects = {}
+const cleanCronObjects = () => {
+    if(Object.keys(cronObjects).length){
+        Object.keys(cronObjects).forEach( zona => {
+            if(zona !== 'unico'){
+                cronObjects[zona] ? Object.keys(cronObjects[zona]).forEach( hora => {
+                    cronObjects[zona][hora] ? cronObjects[zona][hora].cron.destroy() : null;
+                }) : null
+            }else{
+                cronObjects['unico'].destroy()
+            }
+        })
+        cronObjects = {}
+    }
 }
-setCronDinamico()
+const setCronListings = async () => {
+    const cron = require('node-cron')
+    const ControllerSubidasPersonalizadasConfig = require("./components/configSubidas/index")
+    const store = require('../store/mysql')
+    const subirAnuncios = require('./cron/subirAnuncios')
+
+    console.log('set crons')
+    cleanCronObjects()
+    const response = await ControllerSubidasPersonalizadasConfig.list()
+    const {tipo, zona, avisos_x_cron, interval_seg_cron} = response[0]
+    if(tipo === 'AUTOMATICO'){
+        switch (zona) {
+            case 'COUNTRY':
+                query = `
+                    SELECT 
+                        SUM(detalle.subidas) as subidas,
+                        detalle.fecha_inicio as hora,
+                        country.name as country, country.name as zona
+                    FROM subida_personalizada_completa_detalle as detalle
+                    INNER JOIN subida_personalizada_completa as subida ON detalle.id_subida_personalizada_completa = subida.id
+                    INNER JOIN comercio as comercio ON comercio.id = subida.id_comercio
+                    INNER JOIN country as country ON country.id = comercio.country
+                    WHERE detalle.fecha_inicio > NOW() AND detalle.fecha_inicio < DATE_ADD(NOW(), INTERVAL '1' HOUR)
+                    GROUP BY hora, zona
+                `
+                break;
+            case 'STATE':
+                query = `
+                    SELECT 
+                        SUM(detalle.subidas) as subidas,
+                        detalle.fecha_inicio as hora,
+                        country.name as country, country.name, state.name as zona
+                    FROM subida_personalizada_completa_detalle as detalle
+                    INNER JOIN subida_personalizada_completa as subida ON detalle.id_subida_personalizada_completa = subida.id
+                    INNER JOIN comercio as comercio ON comercio.id = subida.id_comercio
+                    INNER JOIN country as country ON country.id = comercio.country
+                    INNER JOIN state as state ON state.id = comercio.state
+                    WHERE detalle.fecha_inicio > NOW() AND detalle.fecha_inicio < DATE_ADD(NOW(), INTERVAL '1' HOUR)
+                    GROUP BY hora, zona
+                `
+                break;
+            case 'CITY':
+                query = `
+                    SELECT 
+                        SUM(detalle.subidas) as subidas,
+                        detalle.fecha_inicio as hora,
+                        country.name as country, country.name, state.name as state, (CASE WHEN city.name IS NOT NULL THEN city.name ELSE state.name END) as zona
+                    FROM subida_personalizada_completa_detalle as detalle
+                    INNER JOIN subida_personalizada_completa as subida ON detalle.id_subida_personalizada_completa = subida.id
+                    INNER JOIN comercio as comercio ON comercio.id = subida.id_comercio
+                    INNER JOIN country as country ON country.id = comercio.country
+                    INNER JOIN state as state ON state.id = comercio.state
+                    LEFT JOIN city as city ON city.id = comercio.city
+                    WHERE detalle.fecha_inicio > NOW() AND detalle.fecha_inicio < DATE_ADD(NOW(), INTERVAL '1' HOUR)
+                    GROUP BY hora, zona
+                `
+                break;
+            default:
+                break;
+        }
+        const listado_de_fecha_hora = await store.customQuery(query)
+        listado_de_fecha_hora.forEach( crone => {
+            let intervalo = get_subidas_seg(crone.hora.subidas)
+            cronObjects[crone.zona][crone.hora] = {
+                ...intervalo,
+                cron: cron.schedule(
+                    `*/${intervalo.interval} * * * * *`, ()=>subirAnuncios("AUTOMATICO", intervalo.subidas_maxima_x_cron, zona, crone.zona)
+                )
+            }
+        })
+    }else{
+        cronObjects.unico = cron.schedule(
+            `*/${interval_seg_cron} * * * * *`, ()=>subirAnuncios("MANUAL", avisos_x_cron)
+        )
+    }
+}
+cron.schedule(
+    `0 0 */1 * * *`, setCronListings
+)
+
+setCronListings()
+
+
+const get_subidas_seg = (subidas) => {
+    var subidas_maxima_x_cron = 5, interval = 2;
+    if(subidas < 2400){
+        if(subidas < 600){
+            subidas_maxima_x_cron = 5
+            interval = 60 / ( ( subidas / 60 ) / 5);
+        }else if(subidas >= 600 && subidas < 1200){
+            subidas_maxima_x_cron = 10
+            interval = 60 / ( ( subidas / 60 ) / 10);
+        }else if(subidas >= 1200){
+            subidas_maxima_x_cron = 20
+            interval = 3600 / (subidas / 20);
+        }
+    }else{
+        subidas_maxima_x_cron = 25
+        interval = 3600 / (subidas / 25);
+    }
+    return {
+        subidas_maxima_x_cron,
+        interval 
+    }
+}
 
 // CRON
 // cron.schedule('* * * * *', actualizarTop);

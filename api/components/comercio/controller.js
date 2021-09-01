@@ -32,7 +32,7 @@ module.exports = function (injectedStore) {
                 let comerciosTopData
 
                 if (body.pais) {
-                    comerciosTopData = await store.stored_procedure('get_comercios_top_pais_localidad', `'${ body.pais }', '${ body.localidad }'`)
+                    comerciosTopData = await store.stored_procedure('get_comercios_top_pais_localidad', `'${ body.pais }'`)
                 } else {
                     comerciosTopData = await store.stored_procedure_without_params('get_comercios_top_homepage')
                 }
@@ -54,7 +54,7 @@ module.exports = function (injectedStore) {
 
                 let comerciosData
                 if (body.pais) {
-                    comerciosData = await store.stored_procedure('get_comercios_fuera_de_top_pais_localidad', `'${ body.pais }', '${ body.localidad }'`)
+                    comerciosData = await store.stored_procedure('get_comercios_fuera_de_top_pais_localidad', `'${ body.pais }'`)
                 } else {
                     comerciosData = await store.stored_procedure_without_params('get_comercios_homepage')
                 }
@@ -76,8 +76,9 @@ module.exports = function (injectedStore) {
 
                     comercios.push(c)
                 }
-
-
+                console.log('pais: ',body.pais)
+                console.log('comercios top: ',comerciosTop)
+                console.log('comercios: ',comercios)
                 resolve({
                     comerciosTop,
                     comercios
@@ -211,7 +212,7 @@ module.exports = function (injectedStore) {
                 const { tags, celular, descripcion, direccion, distrito, email, envios_provincia_exterior,
                     experiencia, facebook, id_city, nombre, numero_signal, skype, telegram,
                     tipo_venta, vende, web, whatsapp, tags_usuario, posicion, id_sub_categoria, 
-                    horario, camposPersonalizados } = body
+                    horario, camposPersonalizados, country, state, city } = body
                 const { tipo, files } = uploads
                 
                 const tagsData = JSON.parse(tags)
@@ -254,13 +255,15 @@ module.exports = function (injectedStore) {
                     facebook,
                     web,
                     direccion,
+                    country : country ? parseInt(country) : null,
+                    state : state ? parseInt(state) : null,
+                    city : city ? parseInt(city) :null,
                     distrito,
                     skype,
                     created_at: moment().utc().format('YYYY-MM-DD HH-mm-ss'),
                     posicion: moment().utc().format('YYYY-MM-DD HH:mm:ss'),
                     update_at: null
                 }
-
                 const comercioStored = await store.upsert(TABLA, comercio)
                 
                 // Sacar tags usuario
@@ -359,6 +362,17 @@ module.exports = function (injectedStore) {
                     campos: camposStored
                 })
             } catch (error) {
+                reject(error)
+            }
+        })
+    }
+
+    async function update(req, res) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const update = await store.update(TABLA, req)
+                resolve(update)
+            }catch (error) {
                 reject(error)
             }
         })
@@ -471,6 +485,7 @@ module.exports = function (injectedStore) {
         updateInfoGeneral,
         getVistos,
         updateUbicacion,
-        updateSubidaPersonalizada
+        updateSubidaPersonalizada,
+        update
     }
 }
