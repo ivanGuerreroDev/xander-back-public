@@ -14,6 +14,7 @@ router.get('/get-by-user', secure('checktoken'), getByUser)
 router.get('/get-by-slug/:slug', getBySlug)
 router.get('/get-name-count/:name', getNameCount)
 router.post('/', secure('checktoken'), upsert)
+router.post('/actualizar', secure('checktoken'), update)
 router.post('/subir-fotos', subirFotos)
 router.post('/get-vistos', getVistos)
 router.put('/info-general', updateInfoGeneral)
@@ -73,6 +74,14 @@ function getNameCount (req, res, next) {
 
 function upsert (req, res, next) {
     Controller.upsert(req, res)
+        .then(user => {
+            response.success(req, res, user, 201)
+        })
+        .catch(next)
+}
+
+function update (req, res, next) {
+    Controller.update(req, res)
         .then(user => {
             response.success(req, res, user, 201)
         })

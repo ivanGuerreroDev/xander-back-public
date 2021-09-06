@@ -13,6 +13,7 @@ module.exports = function (injectedStore) {
         return store.stored_procedure_without_params('get_subidas_precio_asc')
     }
 
+
     function upsert(data) {
         const { duracion, subidas_dia, precio } = data
 
