@@ -32,7 +32,7 @@ module.exports = function (injectedStore) {
                 let comerciosTopData
 
                 if (body.pais) {
-                    comerciosTopData = await store.stored_procedure('get_comercios_top_pais_localidad', `'${ body.pais }', '${ body.localidad }'`)
+                    comerciosTopData = await store.stored_procedure('get_comercios_top_pais_localidad', `'${ body.pais }'`)
                 } else {
                     comerciosTopData = await store.stored_procedure_without_params('get_comercios_top_homepage')
                 }
@@ -54,7 +54,7 @@ module.exports = function (injectedStore) {
 
                 let comerciosData
                 if (body.pais) {
-                    comerciosData = await store.stored_procedure('get_comercios_fuera_de_top_pais_localidad', `'${ body.pais }', '${ body.localidad }'`)
+                    comerciosData = await store.stored_procedure('get_comercios_fuera_de_top_pais_localidad', `'${ body.pais }'`)
                 } else {
                     comerciosData = await store.stored_procedure_without_params('get_comercios_homepage')
                 }
