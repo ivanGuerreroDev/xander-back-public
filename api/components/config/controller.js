@@ -15,14 +15,15 @@ module.exports = function (injectedStore) {
 
     async function upsert(body) {
 
-        const { fotos_s3, home_v, permitir_lives, correos_ses } = body
+        const { fotos_s3, home_v, permitir_lives, correos_ses, anuncios_zona } = body
 
         let tag = {
             id: body.id ? body.id : nanoid(),
             fotos_s3,
             home_v,
             permitir_lives,
-            correos_ses
+            correos_ses,
+            anuncios_zona
         }
 
         return store.upsert(TABLA, tag)

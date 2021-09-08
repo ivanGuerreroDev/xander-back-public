@@ -7,7 +7,7 @@ const secure = require('../user/secure')
 
 const router = express.Router()
 
-router.get('/', secure('admin'), list)
+router.get('/', list)
 router.post('/', secure('admin'), upsert)
 
 function list (req, res, next) {
