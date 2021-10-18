@@ -10,7 +10,7 @@ const router = express.Router()
 router.get('/', secure("admin"), list)
 router.post('/', secure("admin"), upsert)
 router.get('/truncate-comercio-subidas', truncateData)
-
+ 
 function list (req, res, next) {
     Controller.list()
         .then((lista) => {

@@ -6,8 +6,9 @@ const bodyParser = require('body-parser')
 const app = express()
 const http = require('http').Server(app)
 const io = require('socket.io')(http)
-
+const myEventEmitter = require("events")
 const config = require('../config.js')
+var logger = require("../logger");
 
 // Socket
 const mensajes = require('./socket/mensajes')
@@ -125,88 +126,146 @@ const cleanCronObjects = () => {
         cronObjects = {}
     }
 }
+
 const setCronListings = async () => {
+    let cronString = generateCronString(120);
+                console.log(cronString)
     const cron = require('node-cron')
     const ControllerSubidasPersonalizadasConfig = require("./components/configSubidas/index")
     const store = require('../store/mysql')
     const subirAnuncios = require('./cron/subirAnuncios')
-
-    console.log('set crons')
     cleanCronObjects()
     const response = await ControllerSubidasPersonalizadasConfig.list()
     const {tipo, zona, avisos_x_cron, interval_seg_cron} = response[0]
-    if(tipo === 'AUTOMATICO'){
-        switch (zona) {
-            case 'COUNTRY':
-                query = `
-                    SELECT 
-                        SUM(detalle.subidas) as subidas,
-                        detalle.fecha_inicio as hora,
-                        country.name as country, country.name as zona
-                    FROM subida_personalizada_completa_detalle as detalle
-                    INNER JOIN subida_personalizada_completa as subida ON detalle.id_subida_personalizada_completa = subida.id
-                    INNER JOIN comercio as comercio ON comercio.id = subida.id_comercio
-                    INNER JOIN country as country ON country.id = comercio.country
-                    WHERE detalle.fecha_inicio > NOW() AND detalle.fecha_inicio < DATE_ADD(NOW(), INTERVAL '1' HOUR)
-                    GROUP BY hora, zona
-                `
-                break;
-            case 'STATE':
-                query = `
-                    SELECT 
-                        SUM(detalle.subidas) as subidas,
-                        detalle.fecha_inicio as hora,
-                        country.name as country, country.name, state.name as zona
-                    FROM subida_personalizada_completa_detalle as detalle
-                    INNER JOIN subida_personalizada_completa as subida ON detalle.id_subida_personalizada_completa = subida.id
-                    INNER JOIN comercio as comercio ON comercio.id = subida.id_comercio
-                    INNER JOIN country as country ON country.id = comercio.country
-                    INNER JOIN state as state ON state.id = comercio.state
-                    WHERE detalle.fecha_inicio > NOW() AND detalle.fecha_inicio < DATE_ADD(NOW(), INTERVAL '1' HOUR)
-                    GROUP BY hora, zona
-                `
-                break;
-            case 'CITY':
-                query = `
-                    SELECT 
-                        SUM(detalle.subidas) as subidas,
-                        detalle.fecha_inicio as hora,
-                        country.name as country, country.name, state.name as state, (CASE WHEN city.name IS NOT NULL THEN city.name ELSE state.name END) as zona
-                    FROM subida_personalizada_completa_detalle as detalle
-                    INNER JOIN subida_personalizada_completa as subida ON detalle.id_subida_personalizada_completa = subida.id
-                    INNER JOIN comercio as comercio ON comercio.id = subida.id_comercio
-                    INNER JOIN country as country ON country.id = comercio.country
-                    INNER JOIN state as state ON state.id = comercio.state
-                    LEFT JOIN city as city ON city.id = comercio.city
-                    WHERE detalle.fecha_inicio > NOW() AND detalle.fecha_inicio < DATE_ADD(NOW(), INTERVAL '1' HOUR)
-                    GROUP BY hora, zona
-                `
-                break;
-            default:
-                break;
-        }
-        const listado_de_fecha_hora = await store.customQuery(query)
-        listado_de_fecha_hora.forEach( crone => {
-            let intervalo = get_subidas_seg(crone.hora.subidas)
-            cronObjects[crone.zona][crone.hora] = {
-                ...intervalo,
-                cron: cron.schedule(
-                    `*/${intervalo.interval} * * * * *`, ()=>subirAnuncios("AUTOMATICO", intervalo.subidas_maxima_x_cron, zona, crone.zona)
-                )
-            }
-        })
-    }else{
-        cronObjects.unico = cron.schedule(
-            `*/${interval_seg_cron} * * * * *`, ()=>subirAnuncios("MANUAL", avisos_x_cron)
-        )
+    switch (zona) {
+        case 'COUNTRY':
+            query = `
+                SELECT 
+                    SUM(detalle.subidas) as subidas,
+                    detalle.fecha_inicio as hora,
+                    country.name as country, country.name as zona
+                FROM subida_personalizada_completa_detalle as detalle
+                INNER JOIN subida_personalizada_completa as subida ON detalle.id_subida_personalizada_completa = subida.id
+                INNER JOIN comercio as comercio ON comercio.id = subida.id_comercio
+                INNER JOIN country as country ON country.id = comercio.country
+                WHERE detalle.fecha_inicio = date_format(NOW(),'%Y-%m-%d %H:00:00')
+                GROUP BY hora, zona
+            `
+            break;
+        case 'STATE':
+            query = `
+                SELECT 
+                    SUM(detalle.subidas) as subidas,
+                    detalle.fecha_inicio as hora,
+                    country.name as country, country.name, state.name as zona
+                FROM subida_personalizada_completa_detalle as detalle
+                INNER JOIN subida_personalizada_completa as subida ON detalle.id_subida_personalizada_completa = subida.id
+                INNER JOIN comercio as comercio ON comercio.id = subida.id_comercio
+                INNER JOIN country as country ON country.id = comercio.country
+                INNER JOIN state as state ON state.id = comercio.state
+                WHERE detalle.fecha_inicio = date_format(NOW(),'%Y-%m-%d %H:00:00')
+                GROUP BY hora, zona
+            `
+            break;
+        case 'CITY':
+            query = `
+                SELECT 
+                    SUM(detalle.subidas) as subidas,
+                    detalle.fecha_inicio as hora,
+                    country.name as country, country.name, state.name as state, (CASE WHEN city.name IS NOT NULL THEN city.name ELSE state.name END) as zona
+                FROM subida_personalizada_completa_detalle as detalle
+                INNER JOIN subida_personalizada_completa as subida ON detalle.id_subida_personalizada_completa = subida.id
+                INNER JOIN comercio as comercio ON comercio.id = subida.id_comercio
+                INNER JOIN country as country ON country.id = comercio.country
+                INNER JOIN state as state ON state.id = comercio.state
+                LEFT JOIN city as city ON city.id = comercio.city
+                WHERE detalle.fecha_inicio = date_format(NOW(),'%Y-%m-%d %H:00:00')
+                GROUP BY hora, zona
+            `
+            break;
+        default:
+            break;
     }
+    const listado_de_fecha_hora = await store.customQuery(query)
+    try{
+        if(tipo === 'AUTOMATICO'){
+            listado_de_fecha_hora.forEach( crone => {
+                let intervalo = get_subidas_seg(crone.hora.subidas)
+                subirAnuncios("AUTOMATICO", intervalo.subidas_maxima_x_cron, zona, crone.zona);
+                let cronString = generateCronString(intervalo.interval);
+                console.log(cronString)
+                cronObjects = {
+                    ...cronObjects,
+                    [crone.zona] : {
+                        ...cronObjects[crone.zona],
+                        [crone.hora.toString()]: {
+                            ...intervalo,
+                            cron: cron.cron.schedule(
+                                cronString, ()=>subirAnuncios("AUTOMATICO", intervalo.subidas_maxima_x_cron, zona, crone.zona)
+                            )
+                        }
+                    }
+                }
+            })
+        }else{
+            listado_de_fecha_hora.forEach( crone => {
+                subirAnuncios("MANUAL", avisos_x_cron, zona, crone.zona)
+                let cronString = generateCronString(interval_seg_cron);
+                console.log(cronString)
+                cronObjects = {
+                    ...cronObjects,
+                    [crone.zona] : {
+                        ...cronObjects[crone.zona],
+                        [crone.hora.toString()]: {
+                            subidas_maxima_x_cron: avisos_x_cron,
+                            interval: interval_seg_cron,
+                            cron: cron.schedule(
+                                cronString, ()=>subirAnuncios("MANUAL", avisos_x_cron, zona, crone.zona)
+                            )
+                        }
+                    }
+                }
+            })
+            
+        }
+        Object.keys(cronObjects).forEach(e=>{
+            Object.keys(cronObjects[e]).forEach(hora=>{
+                logger.info("zona: "+e+" intervalo: "+cronObjects[e][hora].interval+" subidas maximas: "+cronObjects[e][hora].subidas_maxima_x_cron+"\n")
+            })
+        })
+        
+    }catch(err){
+        console.log(err)
+    }
+    
 }
 cron.schedule(
     `0 0 */1 * * *`, setCronListings
 )
 
-setCronListings()
+function generateCronString (segs) {
+    let mod = segs % 60;
+    let minutes = parseInt(segs / 60);
+    let hours = parseInt(minutes / 60);
+    let mod_minutes = minutes % 60;
+    if(segs > 0 && segs <= 60){
+        return `*/${segs} * * * * *`
+    }else if (segs > 60 && segs < 3600 && mod === 0){
+        return `0 */${minutes} * * * *`
+    }else if (segs > 60 && segs < 3600 && mod !== 0){
+        return `*/${mod} */${minutes} * * * *`
+    }else if(hours >= 1 && hours < 24 && mod_minutes !== 0 && mod !== 0){
+        return `*/${mod} */${minutes} */${hours} * * *`
+    }else if(hours >= 1 && hours < 24 && mod_minutes !== 0 && mod === 0){
+        return `0 */${minutes} */${hours} * * *`
+    }else if (hours >= 1 && hours < 24 && mod_minutes === 0 && mod === 0){
+        return `0 0 */${hours} * * *`
+    }else{
+        return `*/60 * * * * *`
+    }
+} 
 
+setCronListings()
 
 const get_subidas_seg = (subidas) => {
     var subidas_maxima_x_cron = 5, interval = 2;

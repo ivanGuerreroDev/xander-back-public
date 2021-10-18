@@ -179,7 +179,7 @@ module.exports = function (injectedStore) {
                 const comercio = {
                     id: idComercio,
                     id_subida_personalizada_completa: subidaPersonalizadaUltima.id,
-                    update_at: subidaPersonalizadaUltima.fecha_inicio
+                    update_at: fechaInicio
                 }
 
                 await ControllerComercio.updateSubidaPersonalizada(comercio)
